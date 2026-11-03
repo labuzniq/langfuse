@@ -313,26 +313,48 @@ describe("getOAuth2AccessToken", () => {
       .mockResolvedValueOnce(token("token-2"));
 
     const first = await getOAuth2AccessToken({ profile, credential });
-    invalidateOAuth2AccessToken(first.cacheKey);
+    invalidateOAuth2AccessToken(first.cacheKey, first.accessToken);
     const second = await getOAuth2AccessToken({ profile, credential });
 
     expect(second.accessToken).toBe("token-2");
     expect(requestMock).toHaveBeenCalledTimes(2);
   });
 
-  test("invalidating during a fetch still hands its token to the waiting callers", async () => {
-    let resolveRequest: (value: ReturnType<typeof token>) => void = () => {};
-    requestMock.mockReturnValueOnce(
+  test("callers rejected with the same token share one refetch", async () => {
+    let resolveRefetch: (value: ReturnType<typeof token>) => void = () => {};
+    requestMock.mockResolvedValueOnce(token("token-1")).mockReturnValueOnce(
       new Promise((resolve) => {
-        resolveRequest = resolve;
+        resolveRefetch = resolve;
       }),
     );
 
-    const pending = getOAuth2AccessToken({ profile, credential });
-    invalidateOAuth2AccessToken(getOAuth2CacheKey(profile, credential));
-    resolveRequest(token("token-1"));
+    // A and B both hold token-1 and both get a 401 for it.
+    const a = await getOAuth2AccessToken({ profile, credential });
+    const b = await getOAuth2AccessToken({ profile, credential });
+    invalidateOAuth2AccessToken(a.cacheKey, a.accessToken);
+    const aRetry = getOAuth2AccessToken({ profile, credential });
+    invalidateOAuth2AccessToken(b.cacheKey, b.accessToken);
+    const bRetry = getOAuth2AccessToken({ profile, credential });
+    resolveRefetch(token("token-2"));
 
-    await expect(pending).resolves.toMatchObject({ accessToken: "token-1" });
+    await expect(aRetry).resolves.toMatchObject({ accessToken: "token-2" });
+    await expect(bRetry).resolves.toMatchObject({ accessToken: "token-2" });
+    expect(requestMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("invalidating an older token leaves the cached newer token", async () => {
+    requestMock
+      .mockResolvedValueOnce(token("token-1"))
+      .mockResolvedValueOnce(token("token-2"));
+
+    const first = await getOAuth2AccessToken({ profile, credential });
+    invalidateOAuth2AccessToken(first.cacheKey, "token-1");
+    await getOAuth2AccessToken({ profile, credential });
+    invalidateOAuth2AccessToken(first.cacheKey, "token-1");
+    const third = await getOAuth2AccessToken({ profile, credential });
+
+    expect(third.accessToken).toBe("token-2");
+    expect(requestMock).toHaveBeenCalledTimes(2);
   });
 
   test("logs each successful fetch without the token or secret", async () => {

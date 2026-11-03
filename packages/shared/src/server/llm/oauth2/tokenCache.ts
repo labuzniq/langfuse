@@ -94,9 +94,20 @@ export async function getOAuth2AccessToken({
   return { accessToken: token.accessToken, cacheKey };
 }
 
-/** Drops a cached token, e.g. after the gateway rejected it with a 401. */
-export function invalidateOAuth2AccessToken(cacheKey: string): void {
-  tokenCache.delete(cacheKey);
+/**
+ * Drops the cached token after the gateway rejected it, e.g. with a 401. Only
+ * the rejected token is dropped: a newer cached token or a fetch already in
+ * flight for the key is kept, so callers rejected with the same token share
+ * one refetch.
+ */
+export function invalidateOAuth2AccessToken(
+  cacheKey: string,
+  rejectedAccessToken: string,
+): void {
+  // peek() returns undefined while a fetch for the key is in flight.
+  if (tokenCache.peek(cacheKey)?.accessToken === rejectedAccessToken) {
+    tokenCache.delete(cacheKey);
+  }
 }
 
 export function clearOAuth2TokenCache(): void {
