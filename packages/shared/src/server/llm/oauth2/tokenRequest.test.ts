@@ -11,7 +11,11 @@ import {
   resolveOAuth2Profile,
   type OAuth2Config,
 } from "../../../interfaces/oauth2Providers";
-import { MaxRedirectsExceededError } from "../../outbound-url/fetch";
+import {
+  InvalidRedirectResponseError,
+  MaxRedirectsExceededError,
+} from "../../outbound-url/fetch";
+import { OutboundUrlValidationError } from "../../outbound-url/validation";
 import { fetchSecureLlmUrl } from "../secureLlmFetch";
 import { prepareOAuth2Credential } from "./credential";
 import { OAuth2TokenError } from "./errors";
@@ -465,6 +469,39 @@ describe("requestOAuth2Token response handling", () => {
     expect(error.kind).toBe("credential");
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  test("a redirect without a usable Location is a credential error", async () => {
+    respondWith(
+      new InvalidRedirectResponseError(
+        `Redirect response (302) missing Location header at ${TOKEN_ENDPOINT}`,
+      ),
+    );
+
+    const error = await rejection(request(profile, "s3cr3t", 3));
+
+    expect(error.kind).toBe("credential");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  test("an endpoint blocked by outbound URL validation is disabled without retry", async () => {
+    // Connection-time validation surfaces inside undici's "fetch failed".
+    respondWith(
+      new TypeError("fetch failed", {
+        cause: new OutboundUrlValidationError(
+          "blocked-ip",
+          "Blocked IP address detected",
+        ),
+      }),
+    );
+
+    const error = await rejection(request(profile, "s3cr3t", 3));
+
+    expect(error.kind).toBe("disabled");
+    expect(error.message).toBe(
+      "OAuth2 token endpoint blocked: Blocked IP address detected",
+    );
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("requestOAuth2Token retries", () => {
@@ -548,6 +585,28 @@ describe("requestOAuth2Token retries", () => {
     expect(signals[0]).toBeInstanceOf(AbortSignal);
     expect(signals[1]).toBeInstanceOf(AbortSignal);
     expect(signals[0]).not.toBe(signals[1]);
+  });
+
+  test("a failed DNS lookup is retried", async () => {
+    respondWith(
+      new OutboundUrlValidationError(
+        "dns-lookup-failed",
+        "DNS lookup failed for idp.example.com",
+      ),
+      tokenOk(),
+    );
+
+    const result = await request(profile, "s3cr3t", 1);
+
+    expect(result.attempts).toBe(2);
+  });
+
+  test.each([408, 429, 500, 503])("%i is retried", async (status) => {
+    respondWith(new Response("", { status }), tokenOk());
+
+    const result = await request(profile, "s3cr3t", 1);
+
+    expect(result.attempts).toBe(2);
   });
 
   test("maxRetries 0 makes a single attempt", async () => {

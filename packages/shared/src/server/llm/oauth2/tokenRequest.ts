@@ -2,7 +2,11 @@ import { randomUUID } from "node:crypto";
 import { SignJWT } from "jose";
 import type { ResolvedOAuth2Profile } from "../../../interfaces/oauth2Providers";
 import { logger } from "../../logger";
-import { MaxRedirectsExceededError } from "../../outbound-url/fetch";
+import {
+  InvalidRedirectResponseError,
+  MaxRedirectsExceededError,
+} from "../../outbound-url/fetch";
+import { OutboundUrlValidationError } from "../../outbound-url/validation";
 import { findInCauseChain } from "../errors";
 import { fetchSecureLlmUrl } from "../secureLlmFetch";
 import type { PreparedOAuth2Credential } from "./credential";
@@ -149,7 +153,7 @@ async function attemptTokenRequest(
       // A followed redirect would re-send the credentials to another URL.
       { logContext: "OAuth2 token endpoint", maxRedirects: 0 },
     );
-    if (response.status === 429 || response.status >= 500) {
+    if (isTransientStatus(response.status)) {
       await response.body?.cancel();
       return {
         ok: false,
@@ -166,13 +170,29 @@ async function attemptTokenRequest(
     if (
       findInCauseChain(
         error,
-        (candidate): candidate is MaxRedirectsExceededError =>
-          candidate instanceof MaxRedirectsExceededError,
+        (candidate): candidate is Error =>
+          candidate instanceof MaxRedirectsExceededError ||
+          candidate instanceof InvalidRedirectResponseError,
       )
     ) {
       throw new OAuth2TokenError(
         "credential",
         "OAuth2 token endpoint responded with a redirect, which is not followed",
+        { cause: error },
+      );
+    }
+    // Validation failures are permanent policy decisions; a failed DNS lookup
+    // may recover and is retried.
+    const validationError = findInCauseChain(
+      error,
+      (candidate): candidate is OutboundUrlValidationError =>
+        candidate instanceof OutboundUrlValidationError &&
+        candidate.code !== "dns-lookup-failed",
+    );
+    if (validationError) {
+      throw new OAuth2TokenError(
+        "disabled",
+        `OAuth2 token endpoint blocked: ${validationError.message}`,
         { cause: error },
       );
     }
@@ -305,6 +325,11 @@ function parseExpiresIn(value: unknown): number {
     seconds > 0
     ? seconds
     : DEFAULT_EXPIRES_IN_SECONDS;
+}
+
+// 408 Request Timeout, 429 Too Many Requests and 5xx.
+function isTransientStatus(status: number): boolean {
+  return status === 408 || status === 429 || status >= 500;
 }
 
 function parseRetryAfterMs(header: string | null): number | undefined {
