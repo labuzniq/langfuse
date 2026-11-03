@@ -1,3 +1,5 @@
+import { findInCauseChain } from "../errors";
+
 export type OAuth2TokenErrorKind =
   | "config"
   | "credential"
@@ -35,21 +37,9 @@ export class OAuth2TokenError extends Error {
 export function findOAuth2TokenError(
   error: unknown,
 ): OAuth2TokenError | undefined {
-  const visited = new Set<unknown>();
-  let current = error;
-
-  while (current !== null && current !== undefined && !visited.has(current)) {
-    visited.add(current);
-
-    if (current instanceof OAuth2TokenError) {
-      return current;
-    }
-
-    current =
-      typeof current === "object" && "cause" in current
-        ? current.cause
-        : undefined;
-  }
-
-  return undefined;
+  return findInCauseChain(
+    error,
+    (candidate): candidate is OAuth2TokenError =>
+      candidate instanceof OAuth2TokenError,
+  );
 }
