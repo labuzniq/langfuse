@@ -12251,7 +12251,8 @@ components:
             (optional). Methods: `client_secret_basic` (default),
             `client_secret_post`.
 
-            - `workos` — `domain`. Methods: `client_secret_post` only.
+            - `workos` — `domain` (AuthKit domain), `scope` (optional). Methods:
+            `client_secret_post` only.
 
             - `authentik` — `baseUrl`, `scope` (optional). Methods:
             `client_secret_post` only.

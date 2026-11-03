@@ -156,7 +156,7 @@ types:
           - `cognito` (Amazon Cognito) — `domain`, `scope` (optional). Methods: `client_secret_basic` (default), `client_secret_post`.
           - `keycloak` — `baseUrl`, `realm`, `scope` (optional). Methods: `client_secret_basic` (default), `client_secret_post`, `client_secret_jwt`, `private_key_jwt`.
           - `onelogin` — `subdomain`, `scope` (optional), `resource` (optional). Methods: `client_secret_basic` (default), `client_secret_post`.
-          - `workos` — `domain`. Methods: `client_secret_post` only.
+          - `workos` — `domain` (AuthKit domain), `scope` (optional). Methods: `client_secret_post` only.
           - `authentik` — `baseUrl`, `scope` (optional). Methods: `client_secret_post` only.
           - `custom` (any other identity provider) — `tokenEndpoint`, plus optional `scope`, `audience`, `resource`, `assertionAudience` (defaults to `tokenEndpoint`), `sendClientIdWithAssertion` (default `false`). Methods: all four, default `client_secret_basic`.
 
