@@ -1,3 +1,4 @@
+import { APICallError, RetryError } from "ai";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 import { env } from "../../../env";
 import { assertOAuth2TokenEndpointAllowed } from "./allowlist";
@@ -124,5 +125,42 @@ describe("findOAuth2TokenError", () => {
     a.cause = b; // cycle: a -> b -> a
 
     expect(findOAuth2TokenError(a)).toBeUndefined();
+  });
+
+  test("follows a RetryError's lastError (its constructor never sets cause) into a wrapped OAuth2TokenError", () => {
+    const oauthError = new OAuth2TokenError(
+      "unavailable",
+      "OAuth2 token endpoint unavailable after 3 attempts: 503",
+    );
+    const apiCallError = new APICallError({
+      message: "fetch failed",
+      url: "https://idp.example.com/token",
+      requestBodyValues: {},
+      cause: oauthError,
+    });
+    const retryError = new RetryError({
+      message: "Failed after 3 attempts",
+      reason: "maxRetriesExceeded",
+      errors: [apiCallError],
+    });
+
+    expect(findOAuth2TokenError(retryError)).toBe(oauthError);
+  });
+
+  test("is cycle-safe across RetryError.lastError hops", () => {
+    const first = new RetryError({
+      message: "a",
+      reason: "maxRetriesExceeded",
+      errors: [],
+    });
+    const second = new RetryError({
+      message: "b",
+      reason: "maxRetriesExceeded",
+      errors: [first],
+    });
+    // cycle: second.lastError -> first, first.lastError -> second
+    Object.defineProperty(first, "lastError", { value: second });
+
+    expect(findOAuth2TokenError(second)).toBeUndefined();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OAuth2TokenError } from "@langfuse/shared/src/server";
+import { OAuth2TokenError, RetryError } from "@langfuse/shared/src/server";
 
 import { isRejectedConnection, topicProviderError } from "./provider-error";
 
@@ -65,6 +65,23 @@ describe("topicProviderError", () => {
       "OAuth2 token endpoint returned 401: invalid_client",
     );
     const wrapped = new Error("fetch failed", { cause: oauth2Error });
+
+    const error = topicProviderError(wrapped, model);
+
+    expect(error.reason).toBe("authentication");
+    expect(isRejectedConnection(error)).toBe(true);
+  });
+
+  it("maps a credential OAuth2TokenError wrapped in a RetryError the same way", () => {
+    const oauth2Error = new OAuth2TokenError(
+      "credential",
+      "OAuth2 token endpoint returned 401: invalid_client",
+    );
+    const wrapped = new RetryError({
+      message: "Failed after 3 attempts",
+      reason: "maxRetriesExceeded",
+      errors: [oauth2Error],
+    });
 
     const error = topicProviderError(wrapped, model);
 

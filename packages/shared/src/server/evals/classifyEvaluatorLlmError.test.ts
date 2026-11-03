@@ -1,4 +1,4 @@
-import { APICallError } from "ai";
+import { APICallError, RetryError } from "ai";
 import { EvaluatorBlockReason } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 
@@ -103,6 +103,44 @@ describe("classifyEvaluatorLlmError", () => {
       message: oauth2Error.message,
       isRetryable: false,
       blockReason: EvaluatorBlockReason.LLM_CONNECTION_AUTH_INVALID,
+    });
+  });
+
+  it("finds a credential OAuth2TokenError wrapped in a RetryError (retries exhausted after a failed refresh)", () => {
+    const oauth2Error = new OAuth2TokenError(
+      "credential",
+      "OAuth2 token endpoint returned 401: invalid_client",
+    );
+    const wrapped = new RetryError({
+      message: "Failed after 3 attempts",
+      reason: "maxRetriesExceeded",
+      errors: [oauth2Error],
+    });
+
+    expect(classifyEvaluatorLlmError(wrapped)).toMatchObject({
+      kind: "evaluator-policy",
+      message: oauth2Error.message,
+      isRetryable: false,
+      blockReason: EvaluatorBlockReason.LLM_CONNECTION_AUTH_INVALID,
+    });
+  });
+
+  it("finds an unavailable OAuth2TokenError wrapped in a RetryError and does not treat it as retryable", () => {
+    const oauth2Error = new OAuth2TokenError(
+      "unavailable",
+      "OAuth2 token endpoint unavailable after 3 attempts: 503",
+    );
+    const wrapped = new RetryError({
+      message: "Failed after 3 attempts",
+      reason: "maxRetriesExceeded",
+      errors: [oauth2Error],
+    });
+
+    expect(classifyEvaluatorLlmError(wrapped)).toMatchObject({
+      kind: "evaluator-policy",
+      message: oauth2Error.message,
+      isRetryable: false,
+      blockReason: null,
     });
   });
 

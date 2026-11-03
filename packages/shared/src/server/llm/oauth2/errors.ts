@@ -1,3 +1,5 @@
+import { RetryError } from "ai";
+
 import { findInCauseChain } from "../errors";
 
 export type OAuth2TokenErrorKind =
@@ -31,15 +33,32 @@ export class OAuth2TokenError extends Error {
 /**
  * Walks an error's `.cause` chain looking for an `OAuth2TokenError`, so
  * callers can classify a failure that provider SDKs or retry wrappers have
- * re-wrapped. Cycle-safe: a chain that loops back on itself returns
- * `undefined` instead of looping forever.
+ * re-wrapped. An AI SDK `RetryError`'s constructor never sets `cause`, so a
+ * wrapped error only reaches it via `.lastError`; whenever the chain walk
+ * finds one, it hops onto `.lastError` and resumes the `.cause` walk from
+ * there. Cycle-safe: a chain that loops back on itself (through `.cause` or
+ * through repeated `.lastError` hops) returns `undefined` instead of looping
+ * forever.
  */
 export function findOAuth2TokenError(
   error: unknown,
 ): OAuth2TokenError | undefined {
-  return findInCauseChain(
-    error,
-    (candidate): candidate is OAuth2TokenError =>
-      candidate instanceof OAuth2TokenError,
-  );
+  const visited = new Set<unknown>();
+  let current = error;
+
+  while (current !== null && current !== undefined && !visited.has(current)) {
+    visited.add(current);
+
+    const tokenError = findInCauseChain(
+      current,
+      (candidate): candidate is OAuth2TokenError =>
+        candidate instanceof OAuth2TokenError,
+    );
+    if (tokenError) return tokenError;
+
+    const retryError = findInCauseChain(current, RetryError.isInstance);
+    current = retryError?.lastError;
+  }
+
+  return undefined;
 }
