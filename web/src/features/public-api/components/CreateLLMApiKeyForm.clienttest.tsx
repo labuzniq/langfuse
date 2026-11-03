@@ -312,6 +312,27 @@ describe("CreateLLMApiKeyForm", () => {
       expect(input.config).toBeUndefined();
     });
 
+    it("clears a typed secret when the credential changes", () => {
+      renderCreateForm();
+      switchTo("OAuth2 (machine-to-machine)");
+      choose("Identity provider", "Okta");
+      type("Client secret", "client-secret-value");
+
+      choose("Credential", "Certificate (private key)");
+
+      expect(screen.getByLabelText("Private JWK (JSON)")).toHaveValue("");
+    });
+
+    it("clears a typed secret when the identity provider changes", () => {
+      renderCreateForm();
+      switchTo("OAuth2 (machine-to-machine)");
+      type("Client secret", "client-secret-value");
+
+      choose("Identity provider", "Okta");
+
+      expect(screen.getByLabelText("Client secret")).toHaveValue("");
+    });
+
     describe("editing an existing OAuth2 connection", () => {
       const storedOAuth2 = {
         provider: "okta",
@@ -371,6 +392,51 @@ describe("CreateLLMApiKeyForm", () => {
         expect(input.config).toStrictEqual({
           oauth2: { ...storedOAuth2, scope: "llm.invoke llm.read" },
         });
+      });
+
+      it("replaces the stored Anthropic OAuth2 config when switching to an API key", async () => {
+        renderUpdateForm({
+          adapter: "anthropic",
+          displaySecretKey: "...cret",
+          config: { oauth2: storedOAuth2 },
+        });
+
+        switchTo("API key");
+        type("API Key", "sk-ant-new");
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+        const input = await submittedInput(mocks.testUpdateProject);
+        expect(input.secretKey).toBe("sk-ant-new");
+        expect(input.config).toStrictEqual({});
+        await waitFor(() =>
+          expect(mocks.updateProject).toHaveBeenCalledWith(
+            expect.objectContaining({ secretKey: "sk-ant-new", config: {} }),
+          ),
+        );
+      });
+
+      it("drops the stored OpenAI OAuth2 config when switching to an API key", async () => {
+        renderUpdateForm({
+          adapter: "openai",
+          displaySecretKey: "...cret",
+          config: { useResponsesApi: true, oauth2: storedOAuth2 },
+        });
+
+        switchTo("API key");
+        type("API Key", "sk-new");
+        fireEvent.click(screen.getByRole("button", { name: "Save changes" }));
+
+        const input = await submittedInput(mocks.testUpdateProject);
+        expect(input.secretKey).toBe("sk-new");
+        expect(input.config).toStrictEqual({ useResponsesApi: true });
+        await waitFor(() =>
+          expect(mocks.updateProject).toHaveBeenCalledWith(
+            expect.objectContaining({
+              secretKey: "sk-new",
+              config: { useResponsesApi: true },
+            }),
+          ),
+        );
       });
     });
   });

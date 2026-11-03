@@ -203,6 +203,8 @@ export function OAuth2ConnectionFields({
     const current = getValues("oauth2");
     const next = OAUTH2_PROVIDER_PROFILES[provider];
     const authMethod = next.authMethods[0];
+    // A typed secret belongs to one identity provider and credential.
+    setValue("secretKey", "");
     setValue("oauth2.provider", provider);
     setValue("oauth2.authMethod", authMethod);
     setValue(
@@ -221,6 +223,7 @@ export function OAuth2ConnectionFields({
   };
 
   const selectAuthMethod = (authMethod: OAuth2AuthMethod) => {
+    setValue("secretKey", "");
     setValue("oauth2.authMethod", authMethod);
     setValue(
       "oauth2.assertionAlgorithm",
