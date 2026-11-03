@@ -96,6 +96,7 @@ export * from "./llm/baseUrlValidation";
 export * from "./llm/ai-sdk/providers/bedrock";
 export * from "./llm/ai-sdk/providers/vertex";
 export * from "./llm/ai-sdk/providers/vertexAuth";
+export { assertNotOAuth2Connection } from "./llm/oauth2/connection";
 export { type RequestInitWithDispatcher } from "./outbound-url/connection";
 export { type OutboundUrlConnectionValidationOptions } from "./outbound-url/connection";
 export { addSecureOutboundConnectionValidation } from "./outbound-url/connection";
