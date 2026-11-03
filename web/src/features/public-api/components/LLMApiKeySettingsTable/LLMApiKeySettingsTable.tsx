@@ -2,7 +2,11 @@
 import { useCallback, useMemo, type ReactNode } from "react";
 import { Pencil, PlusIcon, Route, Trash } from "@langfuse/icons";
 import { SiAnthropic, SiOpenai } from "@langfuse/icons/si";
-import { LLMAdapter } from "@langfuse/shared";
+import {
+  LLMAdapter,
+  OAUTH2_PROVIDER_PROFILES,
+  isOAuth2Config,
+} from "@langfuse/shared";
 
 import { Badge } from "@/src/components/design-system/Badge/Badge";
 import { Tooltip } from "@/src/components/design-system/Tooltip/Tooltip";
@@ -81,11 +85,26 @@ export function LLMApiKeySettingsTable({
         nullValue: "default",
         enableResizing: false,
       }),
-      createTextTableColumn<LLMApiKeySettingsTableRow>({
+      {
         accessorKey: "displaySecretKey",
         header: "API Key",
         enableResizing: false,
-      }),
+        cell: ({ row }) => {
+          const { config, displaySecretKey } = row.original;
+          return (
+            <div className="flex items-center gap-2">
+              <span>{displaySecretKey}</span>
+              {isOAuth2Config(config) ? (
+                <Badge
+                  text={`OAuth2 · ${OAUTH2_PROVIDER_PROFILES[config.oauth2.provider].label}`}
+                  size="sm"
+                  color="filled"
+                />
+              ) : null}
+            </div>
+          );
+        },
+      },
       ...(showExtraHeaderKeys
         ? [
             createTextTableColumn<LLMApiKeySettingsTableRow, string[]>({
