@@ -16,7 +16,7 @@ const mocks = vi.hoisted(() => ({
 // The form reads the cloud region once at import; pin it so the suite does not
 // depend on a developer's local .env.
 vi.mock("@/src/env.mjs", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@/src/env.mjs")>();
+  const original = await importOriginal<{ env: Record<string, unknown> }>();
   return {
     ...original,
     env: new Proxy(original.env, {
