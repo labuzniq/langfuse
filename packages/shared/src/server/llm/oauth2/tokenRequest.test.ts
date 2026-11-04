@@ -559,6 +559,7 @@ describe("requestOAuth2Token retries", () => {
     const error = await rejection(request(profile, "s3cr3t", 3));
 
     expect(error.kind).toBe("unavailable");
+    expect(error.lastFailure).toBe("network");
     expect(error.message).toBe(
       "OAuth2 token endpoint unavailable after 4 attempts: network error",
     );
@@ -571,6 +572,7 @@ describe("requestOAuth2Token retries", () => {
 
     const error = await rejection(request(profile, "s3cr3t", 0));
 
+    expect(error.lastFailure).toBe("timeout");
     expect(error.message).toBe(
       "OAuth2 token endpoint unavailable after 1 attempts: timeout",
     );
@@ -616,6 +618,7 @@ describe("requestOAuth2Token retries", () => {
 
     expect(error.kind).toBe("unavailable");
     expect(error.status).toBe(500);
+    expect(error.lastFailure).toBe("status");
     expect(error.message).toBe(
       "OAuth2 token endpoint unavailable after 1 attempts: 500",
     );

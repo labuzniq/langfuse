@@ -47,10 +47,15 @@ const token = (accessToken: string, expiresInSeconds = 3600) => ({
   attempts: 1,
 });
 
-const unavailable = () =>
+const unavailable = (
+  lastFailure: "network" | "timeout" | "status" = "network",
+) =>
   new OAuth2TokenError(
     "unavailable",
-    "OAuth2 token endpoint unavailable after 4 attempts: 503",
+    `OAuth2 token endpoint unavailable after 4 attempts: ${
+      lastFailure === "status" ? "429" : `${lastFailure} error`
+    }`,
+    { lastFailure, ...(lastFailure === "status" ? { status: 429 } : {}) },
   );
 
 describe("getOAuth2AccessToken", () => {
@@ -197,6 +202,64 @@ describe("getOAuth2AccessToken", () => {
     expect(
       getOAuth2CacheKey(profile, { ...credential, algorithm: "HS384" }),
     ).not.toBe(base);
+  });
+
+  test.each(["network", "timeout"] as const)(
+    "an endpoint that ended unavailable after a %s failure fails fast for every credential for 30 seconds",
+    async (lastFailure) => {
+      requestMock.mockRejectedValueOnce(unavailable(lastFailure));
+      const otherCredential = credentialFor("secret-two");
+
+      await expect(
+        getOAuth2AccessToken({ profile, credential }),
+      ).rejects.toMatchObject({ kind: "unavailable" });
+      expect(requestMock).toHaveBeenCalledTimes(1);
+
+      const failFast = await getOAuth2AccessToken({
+        profile: { ...profile, clientId: "other-client" },
+        credential: otherCredential,
+      }).catch((error: unknown) => error);
+      expect(failFast).toBeInstanceOf(OAuth2TokenError);
+      expect(failFast).toMatchObject({ kind: "unavailable" });
+      expect(requestMock).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test("a credential that ended unavailable after HTTP statuses does not block other credentials on the endpoint", async () => {
+    requestMock
+      .mockRejectedValueOnce(unavailable("status"))
+      .mockResolvedValueOnce(token("other-client-token"));
+
+    await expect(
+      getOAuth2AccessToken({ profile, credential }),
+    ).rejects.toMatchObject({ kind: "unavailable" });
+    const other = await getOAuth2AccessToken({
+      profile: { ...profile, clientId: "other-client" },
+      credential: credentialFor("secret-two"),
+    });
+
+    expect(other.accessToken).toBe("other-client-token");
+    expect(requestMock).toHaveBeenCalledTimes(2);
+  });
+
+  test("a credential that ended unavailable after HTTP statuses fails fast for 30 seconds", async () => {
+    requestMock.mockRejectedValueOnce(unavailable("status"));
+
+    await expect(
+      getOAuth2AccessToken({ profile, credential }),
+    ).rejects.toMatchObject({ kind: "unavailable" });
+    await vi.advanceTimersByTimeAsync(30_000 - 1);
+    await expect(
+      getOAuth2AccessToken({ profile, credential }),
+    ).rejects.toMatchObject({ kind: "unavailable" });
+    expect(requestMock).toHaveBeenCalledTimes(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    requestMock.mockResolvedValueOnce(token("token-after-throttling"));
+    const recovered = await getOAuth2AccessToken({ profile, credential });
+
+    expect(recovered.accessToken).toBe("token-after-throttling");
+    expect(requestMock).toHaveBeenCalledTimes(2);
   });
 
   test("an unavailable endpoint fails fast for 30 seconds", async () => {

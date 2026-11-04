@@ -19,8 +19,16 @@ type FetchContext = {
   projectId?: string;
 };
 
-// Normalized token endpoint -> epoch ms until which fetches fail at once.
-const unavailableUntil = new Map<string, number>();
+// Epoch ms until which fetches fail at once, without a request. An endpoint
+// that did not answer at all blocks every credential on it; one that kept
+// answering with a retryable status only blocks the credential it answered,
+// so one client being throttled cannot block other clients of the endpoint.
+// Keyed by normalized token endpoint; bounded by the endpoint allowlist.
+const endpointUnavailableUntil = new Map<string, number>();
+// Keyed by cache key.
+const credentialUnavailableUntil = new LRUCache<string, number>({
+  max: MAX_CACHED_TOKENS,
+});
 
 const tokenCache = new LRUCache<string, CachedToken, FetchContext>({
   max: MAX_CACHED_TOKENS,
@@ -29,8 +37,8 @@ const tokenCache = new LRUCache<string, CachedToken, FetchContext>({
   // Invalidating a key while its fetch is in flight drops the entry but still
   // hands the fetched token to the callers waiting on it.
   ignoreFetchAbort: true,
-  fetchMethod: async (_key, _stale, { options, context }) => {
-    const token = await fetchToken(context);
+  fetchMethod: async (key, _stale, { options, context }) => {
+    const token = await fetchToken(key, context);
     options.ttl = token.ttlMs;
     return token;
   },
@@ -68,11 +76,13 @@ export function getOAuth2CacheKey(
 /**
  * Returns an access token for the profile and credential, from the
  * in-process cache while it is valid (until `expires_in` minus 60 s).
- * Concurrent callers for the same key share one request. A token endpoint
- * that ended `unavailable` fails at once, without a request, for 30 s.
+ * Concurrent callers for the same key share one request. After a request
+ * ended `unavailable`, fetches fail at once, without a request, for 30 s:
+ * for every credential on the token endpoint when the endpoint did not
+ * answer (network error or timeout), else only for this credential.
  *
  * @throws OAuth2TokenError from the token request, or `unavailable` while
- * the endpoint is in its fail-fast window.
+ * the endpoint or credential is in its fail-fast window.
  */
 export async function getOAuth2AccessToken({
   profile,
@@ -112,25 +122,32 @@ export function invalidateOAuth2AccessToken(
 
 export function clearOAuth2TokenCache(): void {
   tokenCache.clear();
-  unavailableUntil.clear();
+  endpointUnavailableUntil.clear();
+  credentialUnavailableUntil.clear();
 }
 
-async function fetchToken({
-  profile,
-  credential,
-  projectId,
-}: FetchContext): Promise<CachedToken> {
-  const endpoint = new URL(profile.tokenEndpoint).href;
-  const failFastUntil = unavailableUntil.get(endpoint);
-  if (failFastUntil !== undefined) {
-    if (Date.now() < failFastUntil) {
-      throw new OAuth2TokenError(
-        "unavailable",
-        `OAuth2 token endpoint was unavailable recently; it will be retried after ${new Date(failFastUntil).toISOString()}`,
-      );
-    }
-    unavailableUntil.delete(endpoint);
+function assertNotFailingFast(
+  windows: Pick<Map<string, number>, "get" | "delete">,
+  key: string,
+): void {
+  const failFastUntil = windows.get(key);
+  if (failFastUntil === undefined) return;
+  if (Date.now() < failFastUntil) {
+    throw new OAuth2TokenError(
+      "unavailable",
+      `OAuth2 token endpoint was unavailable recently; it will be retried after ${new Date(failFastUntil).toISOString()}`,
+    );
   }
+  windows.delete(key);
+}
+
+async function fetchToken(
+  cacheKey: string,
+  { profile, credential, projectId }: FetchContext,
+): Promise<CachedToken> {
+  const endpoint = new URL(profile.tokenEndpoint).href;
+  assertNotFailingFast(endpointUnavailableUntil, endpoint);
+  assertNotFailingFast(credentialUnavailableUntil, cacheKey);
 
   let result;
   try {
@@ -141,11 +158,17 @@ async function fetchToken({
     });
   } catch (error) {
     if (error instanceof OAuth2TokenError && error.kind === "unavailable") {
-      unavailableUntil.set(endpoint, Date.now() + FAIL_FAST_WINDOW_MS);
+      const until = Date.now() + FAIL_FAST_WINDOW_MS;
+      if (error.lastFailure === "network" || error.lastFailure === "timeout") {
+        endpointUnavailableUntil.set(endpoint, until);
+      } else {
+        credentialUnavailableUntil.set(cacheKey, until);
+      }
     }
     throw error;
   }
-  unavailableUntil.delete(endpoint);
+  endpointUnavailableUntil.delete(endpoint);
+  credentialUnavailableUntil.delete(cacheKey);
 
   logger.info("OAuth2 access token fetched", {
     projectId,

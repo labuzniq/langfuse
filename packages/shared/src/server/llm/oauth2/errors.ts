@@ -8,6 +8,10 @@ export type OAuth2TokenErrorKind =
   | "disabled"
   | "unavailable";
 
+// How the last attempt of an `unavailable` token request failed: no response
+// ("network", "timeout") or a retryable HTTP status ("status").
+export type OAuth2TokenFailure = "network" | "timeout" | "status";
+
 /**
  * A deterministic failure in the OAuth2 client-credentials token path:
  * resolving a provider profile, checking the token endpoint allowlist, or
@@ -17,16 +21,22 @@ export type OAuth2TokenErrorKind =
 export class OAuth2TokenError extends Error {
   readonly kind: OAuth2TokenErrorKind;
   readonly status?: number;
+  readonly lastFailure?: OAuth2TokenFailure;
 
   constructor(
     kind: OAuth2TokenErrorKind,
     message: string,
-    opts?: { status?: number; cause?: unknown },
+    opts?: {
+      status?: number;
+      lastFailure?: OAuth2TokenFailure;
+      cause?: unknown;
+    },
   ) {
     super(message, { cause: opts?.cause });
     this.name = "OAuth2TokenError";
     this.kind = kind;
     this.status = opts?.status;
+    this.lastFailure = opts?.lastFailure;
   }
 }
 

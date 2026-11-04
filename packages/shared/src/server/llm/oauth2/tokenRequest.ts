@@ -10,7 +10,7 @@ import { OutboundUrlValidationError } from "../../outbound-url/validation";
 import { findInCauseChain } from "../errors";
 import { fetchSecureLlmUrl } from "../secureLlmFetch";
 import type { PreparedOAuth2Credential } from "./credential";
-import { OAuth2TokenError } from "./errors";
+import { OAuth2TokenError, type OAuth2TokenFailure } from "./errors";
 
 const ASSERTION_LIFETIME_SECONDS = 300;
 const DEFAULT_EXPIRES_IN_SECONDS = 300;
@@ -41,6 +41,7 @@ type AttemptOutcome =
       ok: false;
       // HTTP status, "network error" or "timeout"
       reason: string;
+      failure: OAuth2TokenFailure;
       status?: number;
       retryAfterMs?: number;
       cause?: unknown;
@@ -121,7 +122,11 @@ export async function requestOAuth2Token({
       throw new OAuth2TokenError(
         "unavailable",
         `OAuth2 token endpoint unavailable after ${attempt} attempts: ${outcome.reason}`,
-        { status: outcome.status, cause: outcome.cause },
+        {
+          status: outcome.status,
+          lastFailure: outcome.failure,
+          cause: outcome.cause,
+        },
       );
     }
     logger.warn("OAuth2 token request failed, retrying", {
@@ -158,6 +163,7 @@ async function attemptTokenRequest(
       return {
         ok: false,
         reason: String(response.status),
+        failure: "status",
         status: response.status,
         retryAfterMs:
           response.status === 429
@@ -196,9 +202,11 @@ async function attemptTokenRequest(
         { cause: error },
       );
     }
+    const failure = isTimeout(error) ? "timeout" : "network";
     return {
       ok: false,
-      reason: isTimeout(error) ? "timeout" : "network error",
+      reason: failure === "timeout" ? "timeout" : "network error",
+      failure,
       cause: error,
     };
   }
