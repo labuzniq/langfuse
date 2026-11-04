@@ -167,7 +167,7 @@ function fieldIssueMessage(issue: z.core.$ZodIssue) {
     return "Enter the host name only, without https:// or a path.";
   }
   if (issue.format === "url") {
-    return "Enter a full URL starting with https://.";
+    return "Enter a full URL, e.g. https://idp.example.com/oauth2/token.";
   }
   return issue.message;
 }
