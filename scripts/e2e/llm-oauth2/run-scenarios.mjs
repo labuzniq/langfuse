@@ -14,6 +14,8 @@ const REPO_ROOT = resolve(HERE, "../../..");
 const GENERATED = join(HERE, "generated");
 const COMPOSE_ARGS = [
   "compose",
+  "--env-file",
+  join(HERE, "compose.env"),
   "-f",
   join(REPO_ROOT, "docker-compose.build.yml"),
   "-f",
@@ -82,13 +84,15 @@ const results = [];
 async function scenario(id, title, fn) {
   out();
   out(`=== ${id}. ${title}`);
+  const startedAt = Date.now();
+  const took = () => `[${Math.round((Date.now() - startedAt) / 1000)}s]`;
   try {
     const detail = await fn();
     results.push({ id, ok: true });
-    out(`PASS ${id}. ${title}${detail ? ` (${detail})` : ""}`);
+    out(`PASS ${id}. ${title}${detail ? ` (${detail})` : ""} ${took()}`);
   } catch (error) {
     results.push({ id, ok: false });
-    out(`FAIL ${id}. ${title}: ${error.message}`);
+    out(`FAIL ${id}. ${title}: ${error.message} ${took()}`);
   }
 }
 
@@ -217,7 +221,7 @@ const waitForScore = (traceId) =>
     async () => {
       const res = await langfuse(
         "GET",
-        `/api/public/v2/scores?traceId=${traceId}`,
+        `/api/public/v3/scores?traceId=${traceId}`,
       );
       const scores = res.json?.data ?? [];
       return {
@@ -543,7 +547,7 @@ if (results.at(-1)?.ok) {
         async () => {
           const res = await langfuse(
             "GET",
-            `/api/public/v2/scores?traceId=${traceId}&limit=50`,
+            `/api/public/v3/scores?traceId=${traceId}&limit=50`,
           );
           const data = res.json?.data ?? [];
           return {

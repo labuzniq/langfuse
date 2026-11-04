@@ -12,12 +12,13 @@ through the public API. It is run by hand (or by an agent), not in CI.
 | `keycloak/realm.template.json` | Realm `lf-e2e`, access token lifespan 120 s, one confidential client with a service account per auth method: `cs-basic`, `cs-post` (client secret), `cs-jwt` (Signed JWT with client secret), `pk-jwt` (Signed JWT, public key from `generated/`).                                                                |
 | `fake-llm/server.mjs`          | Node built-ins only. `/v1/chat/completions` (OpenAI) and `/v1/messages` (Anthropic) verify the bearer token as an RS256 JWT against the realm JWKS (signature + `exp`) and return a judge-shaped answer. `/fault/token` proxies to the Keycloak token endpoint with fault modes. `/control`, `/stats`, `/health`. |
 | `setup.sh`                     | Generates an RSA key pair (JWK with `kid`) and random client secrets into `generated/` and renders `generated/realm.json`.                                                                                                                                                                                        |
+| `compose.env`                  | Interpolation file passed with `--env-file`, so Compose does not read the repository-root `.env`. Keeps `NEXT_PUBLIC_LANGFUSE_CLOUD_REGION` empty (self-hosted mode).                                                                                                                                             |
 | `run-scenarios.mjs`            | Node built-ins only. Runs the scenarios, prints `PASS`/`FAIL` per scenario, saves the output to `generated/last-run.txt`, exits non-zero on any `FAIL`.                                                                                                                                                           |
 
 `generated/` is git-ignored. No key material is committed.
 
-Host ports: Langfuse `3000` (web), `3030` (worker), Keycloak `18080`, fake-llm
-`18090`, plus the ports of `docker-compose.build.yml` (Postgres `5432`, Redis
+Host ports: Langfuse `3000` (web), `3030` (worker), Keycloak `18080` and
+fake-llm `18090` (both bound to `127.0.0.1` only), plus the ports of `docker-compose.build.yml` (Postgres `5432`, Redis
 `6379`, ClickHouse `8123`/`9000`, MinIO `9090`/`9091`). Stop the local dev
 infra first (`pnpm run infra:dev:down`) or those ports clash.
 
@@ -26,13 +27,22 @@ infra first (`pnpm run infra:dev:down`) or those ports clash.
 From the repository root:
 
 ```bash
+E2E_COMPOSE="docker compose --env-file scripts/e2e/llm-oauth2/compose.env \
+  -f docker-compose.build.yml -f scripts/e2e/llm-oauth2/docker-compose.oauth2.yml"
 bash scripts/e2e/llm-oauth2/setup.sh
-docker compose -f docker-compose.build.yml \
-  -f scripts/e2e/llm-oauth2/docker-compose.oauth2.yml up -d --build --wait
+$E2E_COMPOSE build langfuse-worker   # one image at a time; parallel builds
+$E2E_COMPOSE build langfuse-web      # can hit DNS errors (retry once)
+$E2E_COMPOSE up -d --wait
 node scripts/e2e/llm-oauth2/run-scenarios.mjs
-docker compose -f docker-compose.build.yml \
-  -f scripts/e2e/llm-oauth2/docker-compose.oauth2.yml down -v
+$E2E_COMPOSE down -v
 ```
+
+Always pass `--env-file scripts/e2e/llm-oauth2/compose.env`. Without it,
+Compose fills the `${VAR:-default}` values of `docker-compose.build.yml` from
+the repository-root `.env`: its `localhost` service URLs break the containers,
+and a `NEXT_PUBLIC_LANGFUSE_CLOUD_REGION` there is baked into the web image at
+build time, which turns the stack into Cloud mode (no `http` token endpoints,
+no host whitelist). An image built that way has to be rebuilt.
 
 The run takes about 5 minutes (two waits for token expiry). It can be run
 again against the same stack: it first deletes evaluators and evaluation
@@ -84,7 +94,9 @@ Summary: 10 passed, 0 failed
 
 The script reads job executions straight from Postgres
 (`docker compose exec postgres psql`), because the public API does not expose
-them. Scores and evaluator status come from the public API.
+them. Scores come from `GET /api/public/v3/scores` (the v1/v2 score reads
+answer 404 in the default v4 `events_only` mode), evaluator status from
+`GET /api/public/v2/evaluators/{id}`.
 
 ## Fake LLM
 

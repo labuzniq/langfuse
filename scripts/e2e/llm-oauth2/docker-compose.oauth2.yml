@@ -2,11 +2,13 @@
 # and turns on OAuth2 client credentials for LLM connections.
 #
 #   bash scripts/e2e/llm-oauth2/setup.sh
-#   docker compose -f docker-compose.build.yml \
+#   docker compose --env-file scripts/e2e/llm-oauth2/compose.env \
+#     -f docker-compose.build.yml \
 #     -f scripts/e2e/llm-oauth2/docker-compose.oauth2.yml up -d --build
 #
-# Compose resolves relative paths against the first -f file, so the paths
-# below are relative to the repository root. See README.md in this folder.
+# `--env-file` keeps Compose from reading the repository-root .env (see
+# compose.env). Compose resolves relative paths against the first -f file, so
+# the paths below are relative to the repository root. See README.md.
 
 name: lf-oauth2-e2e
 
@@ -42,7 +44,7 @@ services:
     volumes:
       - ./scripts/e2e/llm-oauth2/generated/realm.json:/opt/keycloak/data/import/lf-e2e-realm.json:ro
     ports:
-      - "18080:8080"
+      - "127.0.0.1:18080:8080"
     healthcheck:
       test:
         - CMD-SHELL
@@ -65,7 +67,7 @@ services:
     volumes:
       - ./scripts/e2e/llm-oauth2/fake-llm:/app:ro
     ports:
-      - "18090:8090"
+      - "127.0.0.1:18090:8090"
     healthcheck:
       test:
         - CMD
