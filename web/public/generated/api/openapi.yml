@@ -12230,25 +12230,25 @@ components:
 
 
             - `entra` (Microsoft Entra ID) — `tenantId`, `scope`. Methods:
-            `client_secret_post` (default), `client_secret_basic`,
+            `client_secret_post` (UI default), `client_secret_basic`,
             `private_key_jwt`.
 
             - `okta` — `domain`, `authorizationServerId` (optional, default
-            `default`), `scope`. Methods: `client_secret_basic` (default),
+            `default`), `scope`. Methods: `client_secret_basic` (UI default),
             `client_secret_post`, `client_secret_jwt`, `private_key_jwt`.
 
-            - `auth0` — `domain`, `audience`. Methods: `client_secret_post`
-            (default), `client_secret_basic`, `private_key_jwt`.
+            - `auth0` — `domain`, `audience`. Methods: `client_secret_post` (UI
+            default), `client_secret_basic`, `private_key_jwt`.
 
             - `cognito` (Amazon Cognito) — `domain`, `scope` (optional).
-            Methods: `client_secret_basic` (default), `client_secret_post`.
+            Methods: `client_secret_basic` (UI default), `client_secret_post`.
 
             - `keycloak` — `baseUrl`, `realm`, `scope` (optional). Methods:
-            `client_secret_basic` (default), `client_secret_post`,
+            `client_secret_basic` (UI default), `client_secret_post`,
             `client_secret_jwt`, `private_key_jwt`.
 
             - `onelogin` — `subdomain`, `scope` (optional), `resource`
-            (optional). Methods: `client_secret_basic` (default),
+            (optional). Methods: `client_secret_basic` (UI default),
             `client_secret_post`.
 
             - `workos` — `domain` (AuthKit domain), `scope` (optional). Methods:

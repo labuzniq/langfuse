@@ -150,12 +150,12 @@ types:
 
           **`oauth2` (OpenAI and Anthropic only)**: machine-to-machine client credentials auth instead of a static API key. Langfuse fetches and caches an access token from the identity provider's token endpoint and sends it as a bearer token, refreshing on expiry or a 401. All shapes share `clientId` (string) and `authMethod`, and accept an optional `assertionAlgorithm` (only with `client_secret_jwt` / `private_key_jwt`). `provider` selects the preset and its fixed token endpoint, or `custom` for any other identity provider:
 
-          - `entra` (Microsoft Entra ID) — `tenantId`, `scope`. Methods: `client_secret_post` (default), `client_secret_basic`, `private_key_jwt`.
-          - `okta` — `domain`, `authorizationServerId` (optional, default `default`), `scope`. Methods: `client_secret_basic` (default), `client_secret_post`, `client_secret_jwt`, `private_key_jwt`.
-          - `auth0` — `domain`, `audience`. Methods: `client_secret_post` (default), `client_secret_basic`, `private_key_jwt`.
-          - `cognito` (Amazon Cognito) — `domain`, `scope` (optional). Methods: `client_secret_basic` (default), `client_secret_post`.
-          - `keycloak` — `baseUrl`, `realm`, `scope` (optional). Methods: `client_secret_basic` (default), `client_secret_post`, `client_secret_jwt`, `private_key_jwt`.
-          - `onelogin` — `subdomain`, `scope` (optional), `resource` (optional). Methods: `client_secret_basic` (default), `client_secret_post`.
+          - `entra` (Microsoft Entra ID) — `tenantId`, `scope`. Methods: `client_secret_post` (UI default), `client_secret_basic`, `private_key_jwt`.
+          - `okta` — `domain`, `authorizationServerId` (optional, default `default`), `scope`. Methods: `client_secret_basic` (UI default), `client_secret_post`, `client_secret_jwt`, `private_key_jwt`.
+          - `auth0` — `domain`, `audience`. Methods: `client_secret_post` (UI default), `client_secret_basic`, `private_key_jwt`.
+          - `cognito` (Amazon Cognito) — `domain`, `scope` (optional). Methods: `client_secret_basic` (UI default), `client_secret_post`.
+          - `keycloak` — `baseUrl`, `realm`, `scope` (optional). Methods: `client_secret_basic` (UI default), `client_secret_post`, `client_secret_jwt`, `private_key_jwt`.
+          - `onelogin` — `subdomain`, `scope` (optional), `resource` (optional). Methods: `client_secret_basic` (UI default), `client_secret_post`.
           - `workos` — `domain` (AuthKit domain), `scope` (optional). Methods: `client_secret_post` only.
           - `authentik` — `baseUrl`, `scope` (optional). Methods: `client_secret_post` only.
           - `custom` (any other identity provider) — `tokenEndpoint`, plus optional `scope`, `audience`, `resource`, `assertionAudience` (defaults to `tokenEndpoint`), `sendClientIdWithAssertion` (default `false`). Methods: all four, default `client_secret_basic`.
