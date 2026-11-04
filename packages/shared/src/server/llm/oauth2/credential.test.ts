@@ -228,7 +228,9 @@ describe("prepareOAuth2Credential", () => {
       }).privateKey.export({ format: "jwk" });
 
       const error = await expectConfigError(
-        prepareOAuth2Credential(customProfile(), JSON.stringify(weakJwk)),
+        prepareOAuth2Credential(customProfile(), JSON.stringify(weakJwk), {
+          verifySigning: true,
+        }),
         "Could not sign the client assertion with the configured key",
       );
       expect(error.cause).toBeUndefined();

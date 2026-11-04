@@ -402,7 +402,9 @@ async function validateOAuth2Connection(params: {
     );
   }
   try {
-    await prepareOAuth2Credential(profile, params.secretKey);
+    await prepareOAuth2Credential(profile, params.secretKey, {
+      verifySigning: true,
+    });
   } catch (error) {
     throw toInvalidRequestError(error);
   }

@@ -47,11 +47,13 @@ const optionalString = (value: unknown): string | undefined =>
  * Validates the decrypted secret of an OAuth2 LLM connection against its
  * resolved profile and turns it into what the token client needs to
  * authenticate. Every problem is an `OAuth2TokenError` of kind `config`
- * whose message never contains key material.
+ * whose message never contains key material. `verifySigning` adds a trial
+ * signature, meant for validating a secret when it is saved.
  */
 export async function prepareOAuth2Credential(
   profile: ResolvedOAuth2Profile,
   decryptedSecret: string,
+  { verifySigning = false }: { verifySigning?: boolean } = {},
 ): Promise<PreparedOAuth2Credential> {
   const fingerprint = createHash("sha256")
     .update(decryptedSecret)
@@ -68,7 +70,7 @@ export async function prepareOAuth2Credential(
       return { ...prepareHmacKey(profile, decryptedSecret), fingerprint };
     case "private_key_jwt":
       return {
-        ...(await preparePrivateKey(profile, decryptedSecret)),
+        ...(await preparePrivateKey(profile, decryptedSecret, verifySigning)),
         fingerprint,
       };
   }
@@ -96,6 +98,7 @@ function prepareHmacKey(profile: ResolvedOAuth2Profile, secret: string) {
 async function preparePrivateKey(
   profile: ResolvedOAuth2Profile,
   secret: string,
+  verifySigning: boolean,
 ) {
   const jwk = parsePrivateJwk(secret);
   const algorithm = resolvePrivateKeyAlgorithm(profile, jwk);
@@ -107,12 +110,14 @@ async function preparePrivateKey(
     // The jose error is dropped on purpose: it may describe the key.
     throw configError("The private JWK could not be imported");
   }
-  try {
-    await new SignJWT({})
-      .setProtectedHeader({ alg: algorithm })
-      .sign(signingKey);
-  } catch {
-    throw clientAssertionSigningError();
+  if (verifySigning) {
+    try {
+      await new SignJWT({})
+        .setProtectedHeader({ alg: algorithm })
+        .sign(signingKey);
+    } catch {
+      throw clientAssertionSigningError();
+    }
   }
 
   return {
