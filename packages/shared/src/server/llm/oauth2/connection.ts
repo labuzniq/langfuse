@@ -52,7 +52,7 @@ export async function resolveOAuth2Connection({
         return response;
       }
 
-      await response.body?.cancel();
+      await response.body?.cancel().catch(() => undefined);
       // The provider was built with `accessToken`, so that is the token the
       // gateway rejected.
       invalidateOAuth2AccessToken(cacheKey, accessToken);
