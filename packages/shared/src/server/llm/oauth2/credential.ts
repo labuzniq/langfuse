@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
-import { importJWK, type CryptoKey, type JWK } from "jose";
+import { importJWK, SignJWT, type CryptoKey, type JWK } from "jose";
 import {
   CLIENT_SECRET_JWT_ALGORITHMS,
   PRIVATE_KEY_JWT_ALGORITHMS,
   type OAuth2AuthMethod,
   type ResolvedOAuth2Profile,
 } from "../../../interfaces/oauth2Providers";
-import { OAuth2TokenError } from "./errors";
+import { clientAssertionSigningError, OAuth2TokenError } from "./errors";
 
 export type PreparedOAuth2Credential = {
   // client_secret_basic / client_secret_post
@@ -106,6 +106,13 @@ async function preparePrivateKey(
   } catch {
     // The jose error is dropped on purpose: it may describe the key.
     throw configError("The private JWK could not be imported");
+  }
+  try {
+    await new SignJWT({})
+      .setProtectedHeader({ alg: algorithm })
+      .sign(signingKey);
+  } catch {
+    throw clientAssertionSigningError();
   }
 
   return {

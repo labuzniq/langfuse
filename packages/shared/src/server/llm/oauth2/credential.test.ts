@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from "node:crypto";
+import { createHash, generateKeyPairSync, randomBytes } from "node:crypto";
 import { exportJWK, generateKeyPair, type JWK } from "jose";
 import { beforeAll, describe, expect, test } from "vitest";
 import {
@@ -220,6 +220,18 @@ describe("prepareOAuth2Credential", () => {
         ),
         "The private JWK could not be imported",
       );
+    });
+
+    test("a key that cannot sign (1024-bit RSA) is a config error", async () => {
+      const weakJwk = generateKeyPairSync("rsa", {
+        modulusLength: 1024,
+      }).privateKey.export({ format: "jwk" });
+
+      const error = await expectConfigError(
+        prepareOAuth2Credential(customProfile(), JSON.stringify(weakJwk)),
+        "Could not sign the client assertion with the configured key",
+      );
+      expect(error.cause).toBeUndefined();
     });
 
     test("error messages never contain JWK values", async () => {

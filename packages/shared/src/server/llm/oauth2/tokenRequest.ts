@@ -10,7 +10,11 @@ import { OutboundUrlValidationError } from "../../outbound-url/validation";
 import { findInCauseChain } from "../errors";
 import { fetchSecureLlmUrl } from "../secureLlmFetch";
 import type { PreparedOAuth2Credential } from "./credential";
-import { OAuth2TokenError, type OAuth2TokenFailure } from "./errors";
+import {
+  clientAssertionSigningError,
+  OAuth2TokenError,
+  type OAuth2TokenFailure,
+} from "./errors";
 
 const ASSERTION_LIFETIME_SECONDS = 300;
 const DEFAULT_EXPIRES_IN_SECONDS = 300;
@@ -71,19 +75,23 @@ export async function createClientAssertion(
     );
   }
   const issuedAt = Math.floor(nowMs / 1000);
-  return new SignJWT({})
-    .setProtectedHeader({
-      ...credential.protectedHeader,
-      alg: algorithm,
-      typ: "JWT",
-    })
-    .setIssuer(profile.clientId)
-    .setSubject(profile.clientId)
-    .setAudience(profile.assertionAudience)
-    .setIssuedAt(issuedAt)
-    .setExpirationTime(issuedAt + ASSERTION_LIFETIME_SECONDS)
-    .setJti(randomUUID())
-    .sign(signingKey);
+  try {
+    return await new SignJWT({})
+      .setProtectedHeader({
+        ...credential.protectedHeader,
+        alg: algorithm,
+        typ: "JWT",
+      })
+      .setIssuer(profile.clientId)
+      .setSubject(profile.clientId)
+      .setAudience(profile.assertionAudience)
+      .setIssuedAt(issuedAt)
+      .setExpirationTime(issuedAt + ASSERTION_LIFETIME_SECONDS)
+      .setJti(randomUUID())
+      .sign(signingKey);
+  } catch {
+    throw clientAssertionSigningError();
+  }
 }
 
 /**
@@ -92,8 +100,9 @@ export async function createClientAssertion(
  * exponential backoff and full jitter; a 429 `Retry-After` replaces the
  * backoff. Redirects are never followed.
  *
- * @throws OAuth2TokenError `credential` for a rejected or unusable response,
- * `unavailable` once all attempts failed transiently.
+ * @throws OAuth2TokenError `config` when the request cannot be built (e.g.
+ * the key cannot sign the client assertion), `credential` for a rejected or
+ * unusable response, `unavailable` once all attempts failed transiently.
  */
 export async function requestOAuth2Token({
   profile,
@@ -244,8 +253,13 @@ async function buildTokenHttpRequest(
       const secret = requireSecret(profile, credential);
       // RFC 6749 §2.3.1: both parts are form-encoded before base64.
       const userPass = `${encodeURIComponent(profile.clientId)}:${encodeURIComponent(secret)}`;
-      headers.Authorization = `Basic ${Buffer.from(userPass).toString("base64")}`;
-      return { headers, body: body.toString(), sensitiveValues: [secret] };
+      const encodedUserPass = Buffer.from(userPass).toString("base64");
+      headers.Authorization = `Basic ${encodedUserPass}`;
+      return {
+        headers,
+        body: body.toString(),
+        sensitiveValues: [secret, encodedUserPass],
+      };
     }
     case "client_secret_post": {
       const secret = requireSecret(profile, credential);
@@ -283,15 +297,19 @@ function requireSecret(
   return credential.secret;
 }
 
-// Replaces each value as sent raw, percent-encoded and form-encoded; longest
-// first so a value contained in another one's encoding cannot leave a part.
+// Replaces each value as sent raw, percent-encoded and form-encoded, and as
+// echoed inside a JSON string (with and without "/" escaped); longest first
+// so a value contained in another one's encoding cannot leave a part.
 function redact(text: string, sensitiveValues: string[]): string {
   const variants = new Set<string>();
   for (const value of sensitiveValues) {
     if (value.length === 0) continue;
+    const jsonEscaped = JSON.stringify(value).slice(1, -1);
     variants.add(value);
     variants.add(encodeURIComponent(value));
     variants.add(new URLSearchParams({ v: value }).toString().slice(2));
+    variants.add(jsonEscaped);
+    variants.add(jsonEscaped.replaceAll("/", "\\/"));
   }
   return [...variants]
     .sort((a, b) => b.length - a.length)

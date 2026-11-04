@@ -1,7 +1,9 @@
+import { createHash, generateKeyPairSync } from "node:crypto";
 import {
   decodeProtectedHeader,
   exportJWK,
   generateKeyPair,
+  importJWK,
   jwtVerify,
   type CryptoKey,
   type JWK,
@@ -237,6 +239,38 @@ describe("requestOAuth2Token request shape", () => {
     expect(payload.exp).toBe(Math.floor(nowMs / 1000) + 300);
   });
 
+  test("a key jose cannot sign with is a config error without a request", async () => {
+    const profile = customProfile({ authMethod: "private_key_jwt" });
+    // jose imports a 1024-bit RSA key but rejects it when signing.
+    const weakJwk = generateKeyPairSync("rsa", {
+      modulusLength: 1024,
+    }).privateKey.export({ format: "jwk" });
+    const credential = {
+      signingKey: await importJWK(weakJwk as JWK, "RS256"),
+      algorithm: "RS256",
+      protectedHeader: {},
+      fingerprint: createHash("sha256")
+        .update(JSON.stringify(weakJwk))
+        .digest("hex"),
+    };
+
+    const error = await rejection(
+      requestOAuth2Token({
+        profile,
+        credential,
+        maxRetries: 3,
+        sleep: noSleep,
+      }),
+    );
+
+    expect(error.kind).toBe("config");
+    expect(error.message).toBe(
+      "Could not sign the client assertion with the configured key",
+    );
+    expect(error.cause).toBeUndefined();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   test("entra private_key_jwt sends client_id and x5t#S256 with PS256", async () => {
     const profile = resolveOAuth2Profile({
       provider: "entra",
@@ -427,6 +461,44 @@ describe("requestOAuth2Token response handling", () => {
 
     expect(error.message).toBe(
       "OAuth2 token endpoint returned 400: client_secret=[redacted]&raw=[redacted]",
+    );
+  });
+
+  test("a 400 echoing the client_secret_basic Authorization header is redacted", async () => {
+    const basicProfile = customProfile({ authMethod: "client_secret_basic" });
+    fetchMock.mockImplementationOnce(async (_url, init) =>
+      json(
+        {
+          error: "invalid_client",
+          received: new Headers(init.headers).get("authorization"),
+        },
+        400,
+      ),
+    );
+
+    const error = await rejection(request(basicProfile, "s3cr3t"));
+
+    expect(error.message).toBe(
+      'OAuth2 token endpoint returned 400: {"error":"invalid_client","received":"Basic [redacted]"}',
+    );
+  });
+
+  test.each([
+    ["JSON-escaped", (s: string) => JSON.stringify(s).slice(1, -1)],
+    [
+      "JSON-escaped with escaped slashes",
+      (s: string) => JSON.stringify(s).slice(1, -1).replaceAll("/", "\\/"),
+    ],
+  ])("a 400 echoing the %s secret is redacted", async (_name, escape) => {
+    const secret = 's3cr3t"quote\\back/slash';
+    respondWith(
+      new Response(`{"client_secret":"${escape(secret)}"}`, { status: 400 }),
+    );
+
+    const error = await rejection(request(profile, secret));
+
+    expect(error.message).toBe(
+      'OAuth2 token endpoint returned 400: {"client_secret":"[redacted]"}',
     );
   });
 

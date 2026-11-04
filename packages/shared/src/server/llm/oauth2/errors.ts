@@ -41,6 +41,16 @@ export class OAuth2TokenError extends Error {
 }
 
 /**
+ * jose checks some key properties, such as the RSA modulus length, only when
+ * signing. Its error is not passed on: it may describe the key.
+ */
+export const clientAssertionSigningError = () =>
+  new OAuth2TokenError(
+    "config",
+    "Could not sign the client assertion with the configured key",
+  );
+
+/**
  * Walks an error's `.cause` chain looking for an `OAuth2TokenError`, so
  * callers can classify a failure that provider SDKs or retry wrappers have
  * re-wrapped. An AI SDK `RetryError`'s constructor never sets `cause`, so a
