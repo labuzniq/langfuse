@@ -13,6 +13,21 @@ const mocks = vi.hoisted(() => ({
   reportTrpcErrorWithoutToast: vi.fn(),
 }));
 
+// The form reads the cloud region once at import; pin it so the suite does not
+// depend on a developer's local .env.
+vi.mock("@/src/env.mjs", async (importOriginal) => {
+  const original = await importOriginal<typeof import("@/src/env.mjs")>();
+  return {
+    ...original,
+    env: new Proxy(original.env, {
+      get: (target, key) =>
+        key === "NEXT_PUBLIC_LANGFUSE_CLOUD_REGION"
+          ? undefined
+          : Reflect.get(target, key),
+    }),
+  };
+});
+
 vi.mock("@/src/features/posthog-analytics/usePostHogClientCapture", () => ({
   usePostHogClientCapture: () => vi.fn(),
 }));

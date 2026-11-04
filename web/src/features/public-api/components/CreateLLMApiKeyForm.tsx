@@ -72,8 +72,10 @@ const ConnectionAuthType = {
 type ConnectionAuthType =
   (typeof ConnectionAuthType)[keyof typeof ConnectionAuthType];
 
+// OAuth2 client credentials are not offered on Langfuse Cloud.
 const supportsOAuth2 = (adapter: LLMAdapter) =>
-  adapter === LLMAdapter.OpenAI || adapter === LLMAdapter.Anthropic;
+  !isLangfuseCloud &&
+  (adapter === LLMAdapter.OpenAI || adapter === LLMAdapter.Anthropic);
 
 /**
  * UI-only sentinel value for the adapter dropdown. Selecting it does not set a
