@@ -291,6 +291,35 @@ describe("OAuth2 client credentials LLM connections", () => {
     },
   );
 
+  test(
+    "an invalid stored oauth2 config fails closed without any request",
+    { timeout: 30_000 },
+    async () => {
+      // Anthropic does not parse the connection config on the way in, so the
+      // fail-closed check in the transport is what rejects it.
+      const gateway = await spinUp((_req, _body, res) => {
+        res.setHeader("content-type", "application/json");
+        res.end(ANTHROPIC_MESSAGES_BODY);
+      });
+
+      const error = await generateLLMText({
+        messages: [{ role: "user", content: "What is 2+2?" }],
+        model: { adapter: LLMAdapter.Anthropic, id: "claude-sonnet-4-5" },
+        maxOutputTokens: 10,
+        connection: {
+          secretKey: encrypt(CLIENT_SECRET),
+          baseURL: `${gateway.url}/v1`,
+          config: { oauth2: { provider: "custom" } },
+        },
+      }).catch((e: unknown) => e);
+
+      expect(error).toBeInstanceOf(OAuth2TokenError);
+      expect(error).toMatchObject({ kind: "config" });
+      expect(gateway.requests).toHaveLength(0);
+      expect(tokenServer.requests).toHaveLength(0);
+    },
+  );
+
   describe("gateway 401", () => {
     test(
       "refreshes the token once and re-sends the request",
