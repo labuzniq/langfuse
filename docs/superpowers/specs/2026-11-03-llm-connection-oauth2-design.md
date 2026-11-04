@@ -13,8 +13,8 @@ that only accepts short-lived OAuth2 access tokens, minted with the machine-to-m
 behalf (LLM-as-a-Judge, playground, prompt experiments, connection test) cannot be used
 against such gateways.
 
-The first user is a self-hosted deployment where hundreds of agents each have their own
-Langfuse project and their own PingFederate client (`private_key_jwt`). The feature is
+An example is a self-hosted deployment where each agent project has its own
+identity-provider client (for example a PingFederate client using `private_key_jwt`). The feature is
 meant to be offered upstream and used world-wide, so it supports the standard client
 authentication methods and ships **presets for well-known identity providers**, the same
 way Langfuse SSO login offers `AUTH_AZURE_AD_*`, `AUTH_KEYCLOAK_*`, ... next to
@@ -376,7 +376,7 @@ Example (PingFederate via Custom, the first user's provisioning call):
 
 ```json
 {
-  "provider": "rbi-genai", "adapter": "openai",
+  "provider": "my-genai-gateway", "adapter": "openai",
   "baseURL": "https://genai.example.com/v1",
   "secretKey": "{\"kty\":\"RSA\",\"kid\":\"agent-x-2026\",...}",
   "config": { "oauth2": {
