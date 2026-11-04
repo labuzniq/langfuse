@@ -320,7 +320,7 @@ const OAUTH2_ADAPTERS: readonly LLMAdapter[] = [
 ];
 
 const NEW_OAUTH2_SECRET_REQUIRED_MESSAGE =
-  "A new secret is required when changing the authentication type, identity provider, auth method, token endpoint or client ID";
+  "A new secret is required when changing the authentication type, identity provider, auth method, token endpoint, client ID, audience or resource";
 
 function validateAnthropicConfig(params: {
   adapter: LLMAdapter;
@@ -410,9 +410,10 @@ async function validateOAuth2Connection(params: {
 
 /**
  * The stored secret must not be sent to a different identity provider,
- * token endpoint or client than it was entered for, nor be reused across
- * API key and OAuth2 authentication. `next === undefined` keeps the stored
- * config.
+ * token endpoint or client than it was entered for, nor be used to get
+ * tokens for a different audience or resource, nor be reused across API key
+ * and OAuth2 authentication. Scope may change without a new secret.
+ * `next === undefined` keeps the stored config.
  */
 function requiresNewSecret(
   existing: LLMConnectionConfig | null,
@@ -432,7 +433,9 @@ function requiresNewSecret(
     before.provider !== after.provider ||
     before.authMethod !== after.authMethod ||
     before.tokenEndpoint !== after.tokenEndpoint ||
-    before.clientId !== after.clientId
+    before.clientId !== after.clientId ||
+    before.formParams.audience !== after.formParams.audience ||
+    before.formParams.resource !== after.formParams.resource
   );
 }
 

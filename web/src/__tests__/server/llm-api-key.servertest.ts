@@ -2399,6 +2399,8 @@ describe("llmApiKey.all RPC", () => {
       overrides: {
         clientId?: string;
         scope?: string;
+        audience?: string;
+        resource?: string;
         tokenEndpoint?: string;
       } = {},
     ) => ({
@@ -2593,6 +2595,20 @@ describe("llmApiKey.all RPC", () => {
       await expect(update({ useResponsesApi: false })).rejects.toThrow(
         NEW_SECRET_REQUIRED,
       );
+      await expect(
+        update(
+          customOAuth2Config("client_secret_basic", {
+            audience: "https://other-gateway.example.com",
+          }),
+        ),
+      ).rejects.toThrow(NEW_SECRET_REQUIRED);
+      await expect(
+        update(
+          customOAuth2Config("client_secret_basic", {
+            resource: "https://other-gateway.example.com",
+          }),
+        ),
+      ).rejects.toThrow(NEW_SECRET_REQUIRED);
 
       await update(
         customOAuth2Config("client_secret_basic", { clientId: "other" }),
@@ -2690,6 +2706,33 @@ describe("llmApiKey.all RPC", () => {
       expect(await prisma.llmApiKeys.count({ where: { projectId } })).toBe(0);
     });
 
+    it.each([
+      ["https://169.254.169.254/token", "Blocked hostname detected"],
+      ["https://127.0.0.1/token", "Blocked IP address detected"],
+      ["https://10.0.0.1/token", "Blocked IP address detected"],
+    ])(
+      "rejects an allowed token endpoint that is a private address (%s)",
+      async (tokenEndpoint, validatorMessage) => {
+        sharedEnv.LANGFUSE_LLM_OAUTH2_ALLOWED_TOKEN_ENDPOINTS = [tokenEndpoint];
+
+        await expect(
+          caller.llmApiKey.create({
+            projectId,
+            provider: "gateway",
+            adapter: LLMAdapter.OpenAI,
+            secretKey: "client-secret-1",
+            config: customOAuth2Config("client_secret_basic", {
+              tokenEndpoint,
+            }),
+          }),
+        ).rejects.toMatchObject({
+          code: "BAD_REQUEST",
+          message: `Invalid OAuth2 token endpoint: ${validatorMessage}`,
+        });
+        expect(await prisma.llmApiKeys.count({ where: { projectId } })).toBe(0);
+      },
+    );
+
     it("rejects a public JWK without echoing key material", async () => {
       const { d: _d, ...publicJwk } = generatePrivateJwk();
 
@@ -2708,6 +2751,26 @@ describe("llmApiKey.all RPC", () => {
       expect(message).toContain("Private JWK required");
       expect(message).not.toContain(publicJwk.x!);
       expect(message).not.toContain(publicJwk.y!);
+    });
+
+    it("rejects a private JWK that cannot sign (1024-bit RSA) at save time", async () => {
+      const weakJwk = generateKeyPairSync("rsa", {
+        modulusLength: 1024,
+      }).privateKey.export({ format: "jwk" });
+
+      await expect(
+        caller.llmApiKey.create({
+          projectId,
+          provider: "gateway",
+          adapter: LLMAdapter.OpenAI,
+          secretKey: JSON.stringify(weakJwk),
+          config: customOAuth2Config("private_key_jwt"),
+        }),
+      ).rejects.toMatchObject({
+        code: "BAD_REQUEST",
+        message: "Could not sign the client assertion with the configured key",
+      });
+      expect(await prisma.llmApiKeys.count({ where: { projectId } })).toBe(0);
     });
 
     it("tests an update without a new secret against the stored JWK", async () => {
