@@ -883,7 +883,10 @@ export function CreateLLMApiKeyForm({
           form.handleSubmit(onSubmit)(e);
         }}
       >
-        <DialogBody>
+        {/* `relative` keeps the hidden native inputs that Radix renders for
+            selects and switches positioned inside this scroll area, so they
+            cannot stretch the dialog. */}
+        <DialogBody className="relative">
           {/* LLM adapter */}
           <FormField
             control={form.control}
