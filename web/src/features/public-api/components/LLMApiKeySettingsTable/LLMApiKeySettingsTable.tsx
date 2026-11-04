@@ -103,7 +103,7 @@ export function LLMApiKeySettingsTable({
               <div className="min-w-0 flex-1">{text}</div>
               <span className="shrink-0">
                 <Badge
-                  text={`OAuth2 · ${OAUTH2_PROVIDER_PROFILES[config.oauth2.provider].label}`}
+                  text={`OAuth 2.0 · ${OAUTH2_PROVIDER_PROFILES[config.oauth2.provider].label}`}
                   size="sm"
                   color="filled"
                 />

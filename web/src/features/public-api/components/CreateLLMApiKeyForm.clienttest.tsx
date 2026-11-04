@@ -187,7 +187,7 @@ describe("CreateLLMApiKeyForm", () => {
       return screen.getAllByRole("option").map((option) => option.textContent);
     };
 
-    const switchTo = (tab: "API key" | "OAuth2 (machine-to-machine)") =>
+    const switchTo = (tab: "API key" | "OAuth 2.0") =>
       fireEvent.mouseDown(screen.getByRole("tab", { name: tab }));
 
     const submittedInput = async (mock: typeof mocks.testProject) => {
@@ -197,7 +197,7 @@ describe("CreateLLMApiKeyForm", () => {
 
     it("shows the Entra fields and the resolved token endpoint", () => {
       renderCreateForm();
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       choose("Identity provider", "Microsoft Entra ID");
 
       type("Tenant ID", "contoso-tenant");
@@ -213,7 +213,7 @@ describe("CreateLLMApiKeyForm", () => {
 
     it("offers no JWT credential for Cognito", () => {
       renderCreateForm();
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       choose("Identity provider", "Amazon Cognito");
 
       expect(optionLabels("Credential")).toEqual([
@@ -224,7 +224,7 @@ describe("CreateLLMApiKeyForm", () => {
 
     it("asks for a private JWK and offers key algorithms for Custom private_key_jwt", () => {
       renderCreateForm();
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       choose("Identity provider", "Custom");
       choose("Credential", "private_key_jwt");
 
@@ -240,7 +240,7 @@ describe("CreateLLMApiKeyForm", () => {
     it("submits the Entra OAuth2 config", async () => {
       renderCreateForm();
       type("Provider name", "gateway");
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       choose("Identity provider", "Microsoft Entra ID");
       type("Tenant ID", "contoso-tenant");
       type("Client ID", "agent-x");
@@ -268,7 +268,7 @@ describe("CreateLLMApiKeyForm", () => {
     it("submits the Custom OAuth2 config without empty optional values", async () => {
       renderCreateForm();
       type("Provider name", "gateway");
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       choose("Identity provider", "Custom");
       type("Token endpoint", "https://login.example.com/as/token.oauth2");
       type("Client ID", "agent-x");
@@ -298,7 +298,7 @@ describe("CreateLLMApiKeyForm", () => {
     it("sends no OAuth2 config after switching back to API key", async () => {
       renderCreateForm();
       type("Provider name", "gateway");
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       type("Client ID", "agent-x");
       switchTo("API key");
       type("API Key", "sk-test");
@@ -314,7 +314,7 @@ describe("CreateLLMApiKeyForm", () => {
 
     it("clears a typed secret when the credential changes", () => {
       renderCreateForm();
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       choose("Identity provider", "Okta");
       type("Client secret", "client-secret-value");
 
@@ -325,7 +325,7 @@ describe("CreateLLMApiKeyForm", () => {
 
     it("clears a typed secret when the identity provider changes", () => {
       renderCreateForm();
-      switchTo("OAuth2 (machine-to-machine)");
+      switchTo("OAuth 2.0");
       type("Client secret", "client-secret-value");
 
       choose("Identity provider", "Okta");
@@ -349,9 +349,10 @@ describe("CreateLLMApiKeyForm", () => {
           config: { useResponsesApi: true, oauth2: storedOAuth2 },
         });
 
-        expect(
-          screen.getByRole("tab", { name: "OAuth2 (machine-to-machine)" }),
-        ).toHaveAttribute("aria-selected", "true");
+        expect(screen.getByRole("tab", { name: "OAuth 2.0" })).toHaveAttribute(
+          "aria-selected",
+          "true",
+        );
         expect(screen.getByLabelText("Domain")).toHaveValue("acme.okta.com");
         expect(screen.getByLabelText("Client secret")).toHaveAttribute(
           "placeholder",

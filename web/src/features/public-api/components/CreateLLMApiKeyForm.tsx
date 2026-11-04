@@ -1472,7 +1472,7 @@ export function CreateLLMApiKeyForm({
                                   />
                                   <Tabs.Trigger
                                     value={ConnectionAuthType.OAuth2}
-                                    label="OAuth2 (machine-to-machine)"
+                                    label="OAuth 2.0"
                                   />
                                 </Tabs.List>
                               </Tabs>
